@@ -40,6 +40,10 @@ final_res = pd.DataFrame(index = range(0, len(df)), columns=['u', 'v', 'LAeq'])
 #
 #print(df['loc_x'][862], df['loc_y'][862], df['loc_z'][862])
 
+df['loc_z'] = df['loc_z'][373] + df['loc_z']
+df['loc_x'] = -df['loc_x'][373] + df['loc_x']
+#Y coordinates are showing up correctly somehow
+#df['loc_y'] = df['loc_y'][373] + df['loc_y']
 
 final_res['u'] = (df['loc_x']/df['loc_z'])*f_x + c_x
 final_res['v'] = (df['loc_y']/df['loc_z'])*f_y + c_y

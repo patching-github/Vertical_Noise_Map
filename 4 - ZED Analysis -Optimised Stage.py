@@ -96,6 +96,11 @@ def grab_run_segment(step, spatial):
         num_frames = min(cam_list[0].get_svo_number_of_frames(), cam_list[1].get_svo_number_of_frames())
     print('Number of Frames: ', num_frames)
 
+    if len(cam_list) == 1:
+        num_frames = cam_list[0].get_svo_number_of_frames()
+    elif len(cam_list) == 2:
+        num_frames = min(cam_list[0].get_svo_number_of_frames(), cam_list[1].get_svo_number_of_frames())
+    print('Number of Frames: ', num_frames)
     # for f_num in range(0, 5):
     for f_num in range(num_frames):
         print(f'Frame Number: {f_num}/{num_frames}')
@@ -139,8 +144,6 @@ def grab_run_segment(step, spatial):
                 rotation_vect[index].append(np.asmatrix(camera_pose.get_rotation_vector()).tolist())
                 translation[index].append(np.asmatrix(camera_pose.get_translation().get()).tolist())
 
-                # np.asmatrix(camera_pose.get_rotation_vector().m).tolist()
-                
                 # print(repr(camera_pose.pose_data().m))
 ##                print(f'Frame Number: {i}')
 ##                print(f'Time Value: {time_val[index][i]}')
@@ -156,7 +159,6 @@ def grab_run_segment(step, spatial):
 
                 time_val[index] = np.append(time_val[index], sl.Timestamp.get_nanoseconds(camera_pose.timestamp))
                 trans_mat[index].append(np.asmatrix(camera_pose.pose_data().m).tolist()) #trans_mat[index].append(camera_pose.pose_data().m)
-                
 
             if f_num > 0 and f_num % 1000 == 0: #Every 1,000 frames save the mesh
                 print(f'In Mod 1000, frame number: {f_num}')
@@ -197,10 +199,11 @@ def grab_run_segment(step, spatial):
                 segment += 1
                 save_path[index] = 'Zed_'+str(index)+ '_'+ str(step)+ '_'+str(segment)+'_Mesh'
                 print(f'Segment Number: {segment}')
+
     
     col_camMat = pd.DataFrame(index=np.arange(num_frames), columns=["Camera_Matrix"])
     col_camMat['Camera_Matrix'][0] = np.asmatrix(camMat).tolist()
-    
+
     #Output the position data of the microphone Camera 1
     for index in range (0, len(cam_list)):
         df[index] = pd.DataFrame()
@@ -215,9 +218,9 @@ def grab_run_segment(step, spatial):
         df[index]['map_state'] = mapping_state[index]
         df[index]['pos_state'] = pos_state[index]
         df[index]['Trans_Mat'] = trans_mat[index]
+        df[index]['Camera_Matrix'] = col_camMat
         df[index]['Rotation_Vect'] = rotation_vect[index]
         df[index]['Translation'] = translation[index]
-        df[index]['Camera_Matrix'] = col_camMat
         df[index].to_excel(out_file[index], sheet_name)
 
         cam_list[index].extract_whole_spatial_map(pymesh[index])
@@ -244,31 +247,6 @@ def grab_run_segment(step, spatial):
         save_mesh(pymesh[index], save_path[index])
         cam_list[index].close()
         print("\nFINISHED CAM "+ str(index))
-    
-def transform_pose(pose, tx, ty, tz) :
-    transform_ = sl.Transform()
-    transform_.set_identity()
-    # Translate the tracking frame by tx along the X axis
-    transform_[0][3] = tx
-    transform_[1][3] = ty
-    transform_[2][3] = tz
-    # Pose(new reference frame) = M.inverse() * pose (camera frame) * M, where M is the transform between the two frames
-    transform_inv = sl.Transform()
-    transform_inv.init_matrix(transform_)
-    transform_inv.inverse()
-    pose = transform_inv * pose * transform_
-
-def moveOrigin(fileDir, originIdx):
-    pst_data = pd.read_excel(fileDir)            
-    df = pd.DataFrame(pst_data)
-    new_x = df[originIdx]['loc_x']
-    new_y = df[originIdx]['loc_y']
-
-    df['loc_x'] = df['loc_x'].apply(lambda x: -new_x + x)
-    df['loc_y'] = df['loc_y'].apply(lambda x: -new_y + x)
-
-    df.to_excel('Origin_Moved.xlsx', sheet_name= 'CSS in m')
-
 
 
 def main():
@@ -317,7 +295,7 @@ def main():
         load_mesh_opt = False #Change this to True if you want to use a previous mesh / area
         map_range = 0 #This is recommended to be 0 since SDK 2.6 as it will automatically calculate from resolution_meter #This is how far the map should go out to (range_meter)
         map_resolution = 0.1 #This is the resolution of the map that we are going for (in meters)
-        map_type = sl.SPATIAL_MAP_TYPE.MESH #sl.SPATIAL_MAP_TYPE.FUSED_POINT_CLOUD #Other Option is sl.SPATIAL_MAP_TYPE.MESH
+        map_type = sl.SPATIAL_MAP_TYPE.MESH# FUSED_POINT_CLOUD #MESH #sl.SPATIAL_MAP_TYPE.FUSED_POINT_CLOUD #Other Option is sl.SPATIAL_MAP_TYPE.MESH
         depth_mode = sl.DEPTH_MODE.ULTRA #ULTRA is the highest, QUALITY, is middle, PERFORMANCE, is speed
         sensing_mode = sl.SENSING_MODE.STANDARD #This changes sensing modes, STANDARD = normal, doesn't distort depth, FILL = smoother map, less accurate depth
         coordinate_units = sl.UNIT.METER #This defines what the mesh is generated in METER is meters,
@@ -329,28 +307,19 @@ def main():
         tex_threshold = 100 #Confidence threshold for texture, at 100 all pixels are accepted, at 90 it drops the bottom 10% at 30 it drops the bottom 70%
         min_depth = 0.5 #Can go as low as 0.1m for Zed Mini, Default is 0.2m, Maximum is 3m
 ##        max_depth = map_range #25# 20m is the furthest range for Zed Mini, not necessary to set, has no impact on positional tracking or spatial mapping.
-
+        
     #Define Geometry:
         #For converting the angle of the cameras
         transform.append(sl.Transform())
-        transform.append(sl.Transform())
 
         #Set the initial rotations and translations.    
-        Cam_Rot.append(sl.Rotation())
-        Cam_Rot[0].set_euler_angles(0,0,0, radian = False) #This is the angles of the sensor head based on Neuroworks Design
+        # Cam_Rot.append(sl.Rotation())
+        # Cam_Rot[0].set_euler_angles(0,0,0, radian = False) #This is the angles of the sensor head based on Neuroworks Design
         
-        Cam_Translation.append(sl.Translation())
-        Cam_Translation[0].init_vector(0, 1.0, 0) #Assuming it starts at 1.5 m high #Still need to adjust for the specific dimensions of Cameras
+        # Cam_Translation.append(sl.Translation())
+        # Cam_Translation[0].init_vector(0, 1.0, 0) #Assuming it starts at 1.5 m high #Still need to adjust for the specific dimensions of Cameras
 
-        transform[0].init_rotation_translation(Cam_Rot[0], Cam_Translation[0])
-
-        #If we're running more than one camera.
-        if num_cam == 2:
-            Cam_Rot.append(sl.Rotation())
-            Cam_Rot[1].set_euler_angles(0,30,30, radian = False) #This is the angles of the sensor head based on Neuroworks Design
-            Cam_Translation.append(sl.Translation())
-            Cam_Translation[1].init_vector (0, 1.5, 0) #Assuming it starts at 1.5 m high #Still need to adjust for the specific dimensions of Cameras
-            transform[1].init_rotation_translation(Cam_Rot[1], Cam_Translation[1])
+        # transform[0].init_rotation_translation(Cam_Rot[0], Cam_Translation[0])
 
 
     #Define Running Parameters
@@ -362,19 +331,19 @@ def main():
         runtime.textureness_confidence_threshold = tex_threshold #This may not be able to be set here, if not then set it in the constructor
 
     #Create mesh Example
-        spatial = sl.SpatialMappingParameters()
+        spatial = sl.SpatialMappingParameters(map_type = map_type)
         spatial.save_texture = save_texture
         spatial.range_meter = map_range #Set this to 0 this out to see if we get improved results with Auto Range.
-    ##    spatial.set_range(sl.MAPPING_RANGE.AUTO) #AUTO calculates automatically with resolution
+        spatial.set_range(sl.MAPPING_RANGE.AUTO) #AUTO calculates automatically with resolution
     ##    spatial.set_resolution(sl.MAPPING_RESOLUTION.MEDIUM) #This is for lower level of detail, minor geometry will be ignored.
-        spatial.resolution_meter = map_resolution   #This allows to set the specific depth resolution you want 
-        spatial.map_type = map_type
+        # spatial.resolution_meter = map_resolution   #This allows to set the specific depth resolution you want 
+        # spatial.map_type = map_type
         spatial.max_memory_usage = max_memory
 
 
     #Initialize Cameras
         for i in range(num_cam):
-            filepath.append(Test_Prefix + '_SVO_'+ str(i) + '_'+ str(step) +'.svo')
+            filepath.append(Test_Prefix + '_SVO_0'+ str(i) + str(step) +'.svo')
             out_file.append('Position_Data_' + str(i) + '_'+ str(step) + '.xlsx')
             area_path.append('Zed_'+str(i)+ '_'+ str(step)+'.area')
             save_path.append('Zed_'+str(i)+ '_'+ str(step)+'_Mesh')
@@ -384,33 +353,37 @@ def main():
             input_type = sl.InputType()
             input_type.set_from_svo_file(filepath[i])
             init = sl.InitParameters(input_t = input_type,svo_real_time_mode=False)
-            init.coordinate_system = sl.COORDINATE_SYSTEM.IMAGE
-            init.depth_mode = depth_mode
+            init.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP
+            # init.depth_mode = depth_mode
             init.coordinate_units = coordinate_units
-            init.depth_minimum_distance = min_depth
+            # init.depth_minimum_distance = min_depth
 ##            init.depth_maximum_distance = max_depth
             cam_list.append(sl.Camera())
             status = cam_list[i].open(init)
             if status != sl.ERROR_CODE.SUCCESS:
                 print(repr(status))
-                exit()
+                exit(1)
             pymesh.append(sl.Mesh())
-            tracking.append(sl.PositionalTrackingParameters(transform[i]))
-            tracking[i].initial_world_transform(transform[i])
-            tracking[i].set_floor_as_origin = True
+
+            tracking = sl.PositionalTrackingParameters(_init_pos=transform[i])
+
             if load_mesh_opt: #This is used to load a previous area file and mesh.
                 print("load_mesh is True")
                 pymesh[i].load(load_mesh[i], update_mesh = True)
                 tracking[i].area_file_path = area_path[i] 
-            cam_list[i].enable_positional_tracking(tracking[i]) #cam_list[i].enable_positional_tracking(tracking[i])
-            cam_list[i].enable_spatial_mapping(spatial)
             
-##            print(f'Allowed Resolution: {spatial.allowed_resolution}')
-##            print(f'Set Resolution: {spatial.resolution_meter}')
+            err = cam_list[i].enable_positional_tracking(tracking)
+            if err != sl.ERROR_CODE.SUCCESS:
+                print(repr(err))
+                exit(-1)
+
+            err = cam_list[i].enable_spatial_mapping(spatial)
+            if err != sl.ERROR_CODE.SUCCESS:
+                print(repr(err))
+                exit(-1)
 
 
         grab_run_segment(step, spatial) #This is the one to use in single thread mode.
-        
 
         #Code for running multiple threads
     ##    for index in range (0, num_cam):
